@@ -1,6 +1,4 @@
 // x32 Хук функции CreateFileA
-// Компилировать так:
-// gcc main.c && a.exe
 
 #include <stdio.h>
 #include <Windows.h>
