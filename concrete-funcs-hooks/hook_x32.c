@@ -1,7 +1,12 @@
-// x32 Хук функции CreateFileA
+// x32 хук фукнции CreateFileA
 
 #include <stdio.h>
 #include <Windows.h>
+
+// Адрес хукаемой функции
+FARPROC hookedAddress;
+// Буффер для сохранения оригинальных байт
+char originalBytes[7];
 
 // Сигнатура функции взята отсюда:
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
@@ -15,13 +20,7 @@ typedef __stdcall HANDLE (*TypeCreateFileA)(
     HANDLE hTemplateFile
 );
 
-// Адрес хукаемой функции
-FARPROC hookedAddress;
-// Буффер для сохранения оригинальных байт
-char originalBytes[7];
-
 void SetHook();
-void print_bytes(const void* address, size_t count);
 
 // Функция, заменяющая оригинальную
 HANDLE __stdcall HookCreateFileA(
@@ -38,6 +37,7 @@ HANDLE __stdcall HookCreateFileA(
 	
 	HMODULE hKernel32;
 	TypeCreateFileA FuncCreateFileA;
+	HANDLE result;
 
 	WriteProcessMemory(
 		GetCurrentProcess(), 
@@ -51,7 +51,7 @@ HANDLE __stdcall HookCreateFileA(
 	FuncCreateFileA = 
 		(TypeCreateFileA) GetProcAddress(hKernel32, "CreateFileA");
 
-	return (FuncCreateFileA) (
+	result = (FuncCreateFileA) (
 		lpFileName,
 		dwDesiredAccess,
 		dwShareMode,
@@ -60,54 +60,9 @@ HANDLE __stdcall HookCreateFileA(
 		dwFlagsAndAttributes,
 		hTemplateFile
 	);
-}
 
-
-int main() {
-	TypeCreateFileA FuncCreateFileA;
-	HMODULE hKernel32;
-	HANDLE hFile;
-	const char* filepath;
-	
-	filepath = "testfile.tmp";
-	hKernel32 = LoadLibraryA("kernel32.dll");
-	FuncCreateFileA = 
-		(TypeCreateFileA) GetProcAddress(hKernel32, "CreateFileA");
-	
-	
-	// Вызов оригинальной функции
-	hFile = (FuncCreateFileA) (
-        filepath,
-        GENERIC_WRITE,
-        0,
-        NULL,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
-    CloseHandle(hFile);
-	DeleteFileA(filepath);
-	
-	// Установка хука
 	SetHook();
-	
-	// Вызов функции после установки хука
-	hFile = (FuncCreateFileA) (
-        filepath,
-        GENERIC_WRITE,
-        0,
-        NULL,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
-    CloseHandle(hFile);
-    DeleteFileA(filepath);
-	
-	// Очистка
-	FreeLibrary(hKernel32);
-	printf("Good job =)\n");
-	return 0;
+	return result;
 }
 
 void SetHook() {
@@ -146,10 +101,50 @@ void SetHook() {
     );
 }
 
-void print_bytes(const void* address, size_t count) {
-    const unsigned char* ptr = (const unsigned char*)address; 
-    for (size_t i = 0; i < count; i++) {
-        printf("%02X ", ptr[i]);
-    }
-    printf("\n");
+int main() {
+	TypeCreateFileA FuncCreateFileA;
+	HMODULE hKernel32;
+	HANDLE hFile;
+	const char* filepath;
+	
+	filepath = "testfile.tmp";
+	hKernel32 = LoadLibraryA("kernel32.dll");
+	FuncCreateFileA = 
+		(TypeCreateFileA) GetProcAddress(hKernel32, "CreateFileA");
+	
+	// Вызов оригинальной функции
+	hFile = (FuncCreateFileA) (
+        filepath,
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+    CloseHandle(hFile);
+	DeleteFileA(filepath);
+	
+	// Установка хука
+	SetHook();
+	
+	// Вызов функции после установки хука
+	for (int i = 0; i < 10; ++i) {
+		hFile = (FuncCreateFileA) (
+			filepath,
+			GENERIC_WRITE,
+			0,
+			NULL,
+			CREATE_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL
+		);
+		CloseHandle(hFile);
+		DeleteFileA(filepath);
+	}
+	
+	// Очистка
+	FreeLibrary(hKernel32);
+	printf("Good job =)\n");
+	return 0;
 }
