@@ -1,4 +1,3 @@
-// Компилируется так
 // g++ -m64 usage-example.cpp src/hook-manager.cpp && a.exe && del a.exe
 
 #include "src/hook-manager.h"
@@ -23,7 +22,7 @@ void testHookCreateFileA() {
     void* detourFuncAddr = (void*)payload;
     void* hookAddr = (void*)GetProcAddress(hKernel32, "CreateFileA");
 
-    hookManager = new HookManager(hookAddr, detourFuncAddr, 13);
+    hookManager = new HookManager(hookAddr, detourFuncAddr);
     hookManager->hook();
 
 	for (int i = 0; i < 10; ++i) {
@@ -51,7 +50,7 @@ void testHookCloseHandle() {
     void* detourFuncAddr = (void*)payload;
     void* hookAddr = (void*)GetProcAddress(hKernel32, "CloseHandle");
 
-    hookManager = new HookManager(hookAddr, detourFuncAddr, 13);
+    hookManager = new HookManager(hookAddr, detourFuncAddr);
     hookManager->hook();
 
 	for (int i = 0; i < 5; ++i) {

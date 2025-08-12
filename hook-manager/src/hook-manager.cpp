@@ -2,42 +2,47 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-HookManager::HookManager(void* hookAddr, void* detourFuncAddr, size_t hookSize)
-    : hookAddr(hookAddr), detourFuncAddr(detourFuncAddr), hookSize(hookSize) {}
+HookManager::HookManager(void* hookAddr, void* detourFuncAddr)
+    : hookAddr(hookAddr), detourFuncAddr(detourFuncAddr) {}
 void* HookManager::getDetourFuncAddr() { return detourFuncAddr; }
 void* HookManager::getHookAddr() { return hookAddr; }
 
+// Установка хука
 void HookManager::hook() {
     if (isHooked) return;
-    memcpy(originalBytes, hookAddr, hookSize);
+	// Сохранение оригинальных байт
+    memcpy(originalBytes, hookAddr, 13);
+	// Выдача разрешения на запись на странице памяти с целевой функцией
     DWORD oldProtect;
-    VirtualProtect(hookAddr, hookSize, PAGE_EXECUTE_READWRITE, &oldProtect);
-    uint8_t* hookPtr = (uint8_t*)hookAddr;
+    VirtualProtect(hookAddr, 13, PAGE_EXECUTE_READWRITE, &oldProtect);
+	// ------------------------
     void* hkd = (void*)hooked;
 	// Патч
-	// movabs r15, адрес_функции
-	// jmp r15
-    hookPtr[0] = 0x49;
-    hookPtr[1] = 0xBF;
-    memcpy(hookPtr + 2, &hkd, sizeof(void*));
-    hookPtr[10] = 0x41;
-    hookPtr[11] = 0xFF;
-    hookPtr[12] = 0xE7;
-    VirtualProtect(hookAddr, hookSize, oldProtect, &oldProtect);
+	// mov r11, АДРЕС_ФУНКЦИИ
+	// jmp r11
+	uint8_t patch[13] = { 0x49, 0xBB, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0xFF, 0xE3 };
+    memcpy(patch + 2, &hkd, sizeof(void*));
+	memcpy(hookAddr, patch, 13);
+	// ------------------------
+	// Восстановление разрешений
+    VirtualProtect(hookAddr, 13, oldProtect, &oldProtect);
     isHooked = true;
 }
 
+// Снятие хука
 void HookManager::unhook() {
     if (!isHooked) return;
     DWORD oldProtect;
-    VirtualProtect((void*)hookAddr, hookSize, PAGE_EXECUTE_READWRITE, &oldProtect);
-    memcpy((void*)hookAddr, originalBytes, hookSize);
-    VirtualProtect((void*)hookAddr, hookSize, oldProtect, &oldProtect);
+    VirtualProtect((void*)hookAddr, 13, PAGE_EXECUTE_READWRITE, &oldProtect);
+    memcpy((void*)hookAddr, originalBytes, 13);
+    VirtualProtect((void*)hookAddr, 13, oldProtect, &oldProtect);
     isHooked = false;
 }
 
 HookManager* hookManager = nullptr;
 
+// Функция обертка, сохраняющая состояние стека чтобы 
+// корректо вызвать оригинальную функцию
 void hooked() {
     // в r15 адрес возврата
     // в r14 rsp каким он был до вызова функции (для передачи аргументов функции через стек)

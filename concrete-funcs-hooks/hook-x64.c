@@ -1,3 +1,4 @@
+// gcc64 hook-x64.c && a.exe && del a.exe
 // x64 хук фукнции CreateFileA
 
 #include <stdio.h>
@@ -7,18 +8,6 @@
 FARPROC hookedAddress;
 // Буффер для сохранения оригинальных байт
 char originalBytes[13];
-
-// Сигнатура функции взята отсюда:
-// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
-typedef HANDLE (*TypeCreateFileA)(
-    LPCSTR lpFileName,
-    DWORD dwDesiredAccess,
-    DWORD dwShareMode,
-    LPSECURITY_ATTRIBUTES lpSecurityAttributes,
-    DWORD dwCreationDisposition,
-    DWORD dwFlagsAndAttributes,
-    HANDLE hTemplateFile
-);
 
 void SetHook();
 
@@ -36,7 +25,6 @@ HANDLE HookCreateFileA(
 	printf("CreateFileA function is hooked! Filename: %s\n", lpFileName);
 	
 	HMODULE hKernel32;
-	TypeCreateFileA FuncCreateFileA;
 	HANDLE result;
 
 	WriteProcessMemory(
@@ -47,11 +35,7 @@ HANDLE HookCreateFileA(
 		NULL
 	);
 
-	hKernel32 = LoadLibrary("kernel32.dll");
-	FuncCreateFileA = 
-		(TypeCreateFileA) GetProcAddress(hKernel32, "CreateFileA");
-
-	result = (FuncCreateFileA) (
+	result = CreateFileA(
 		lpFileName,
 		dwDesiredAccess,
 		dwShareMode,
@@ -75,9 +59,6 @@ void SetHook() {
 	// mov r11, АДРЕС_ФУНКЦИИ
 	// jmp r11
     CHAR patch[13] = { 0x49, 0xBB, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0xFF, 0xE3 };
-	
-    hKernel32 = LoadLibraryA("kernel32.dll");
-    hookedAddress = GetProcAddress(hKernel32, "CreateFileA");
     
     ReadProcessMemory(
         GetCurrentProcess(), 
@@ -102,18 +83,16 @@ void SetHook() {
 }
 
 int main() {
-	TypeCreateFileA FuncCreateFileA;
 	HMODULE hKernel32;
 	HANDLE hFile;
 	const char* filepath;
 	
 	filepath = "testfile.tmp";
 	hKernel32 = LoadLibraryA("kernel32.dll");
-	FuncCreateFileA = 
-		(TypeCreateFileA) GetProcAddress(hKernel32, "CreateFileA");
+	hookedAddress = GetProcAddress(hKernel32, "CreateFileA");
 	
 	// Вызов оригинальной функции
-	hFile = (FuncCreateFileA) (
+	hFile = CreateFileA(
         filepath,
         GENERIC_WRITE,
         0,
@@ -130,7 +109,7 @@ int main() {
 	
 	// Вызов функции после установки хука
 	for (int i = 0; i < 10; ++i) {
-		hFile = (FuncCreateFileA) (
+		hFile = CreateFileA(
 			filepath,
 			GENERIC_WRITE,
 			0,
