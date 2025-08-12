@@ -6,23 +6,59 @@
 
 void testHookCloseHandle();
 void testHookCreateFileA();
+void testConcreteHookCreateFileA();
 void payload();
 
 int main() {
-	printf("testHookCloseHandle\n");
+	printf("	testHookCloseHandle\n");
     testHookCloseHandle();
-	printf("testHookCreateFileA\n");
+	printf("	testHookCreateFileA\n");
     testHookCreateFileA();
+	printf("	testConcreteHookCreateFileA\n");
+	testConcreteHookCreateFileA();
     return 0;
+}
+
+void testConcreteHookCreateFileA() {
+	HMODULE hKernel32 = LoadLibraryA("kernel32.dll");
+	void* hookAddr = (void*)GetProcAddress(hKernel32, "CreateFileA");
+	
+	// Не передаю адрес функции, исполняющей полезную нагрузку
+	// Значит в hook надо будет передать адрес функции, которой хукать
+	// такие функции должны иметь сигнатуру хукаемых функций и прописываться
+	// вниз файла hook-manager.cpp и как extern в hook-manager.hEvent
+	// хуки такого вида позволяют получить доступ к аргументам вызываемых функций
+	hookManager = new HookManager(hookAddr, NULL);
+	hookManager->hook((void*)hookCreateFileA);
+	
+	for (int i = 0; i < 10; ++i) {
+		HANDLE hFile = CreateFileA(
+			"testfile.tmp",
+			GENERIC_WRITE,
+			0,
+			NULL,
+			CREATE_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL
+		);
+		CloseHandle(hFile);
+		DeleteFileA("testfile.tmp");
+	}
+	
+	//
+	hookManager->unhook();
+	delete hookManager;
+	FreeLibrary(hKernel32);
+	printf("Good job!\n");
 }
 
 void testHookCreateFileA() {
     HMODULE hKernel32 = LoadLibraryA("kernel32.dll");
 
-    void* detourFuncAddr = (void*)payload;
+    void* payloadFuncAddr = (void*)payload;
     void* hookAddr = (void*)GetProcAddress(hKernel32, "CreateFileA");
 
-    hookManager = new HookManager(hookAddr, detourFuncAddr);
+    hookManager = new HookManager(hookAddr, payloadFuncAddr);
     hookManager->hook();
 
 	for (int i = 0; i < 10; ++i) {
@@ -40,6 +76,7 @@ void testHookCreateFileA() {
 	}
 
     hookManager->unhook();
+	delete hookManager;
     FreeLibrary(hKernel32);
     printf("Good job!\n");
 }
@@ -47,10 +84,10 @@ void testHookCreateFileA() {
 void testHookCloseHandle() {
     HMODULE hKernel32 = LoadLibraryA("kernel32.dll");
 
-    void* detourFuncAddr = (void*)payload;
+    void* payloadFuncAddr = (void*)payload;
     void* hookAddr = (void*)GetProcAddress(hKernel32, "CloseHandle");
 
-    hookManager = new HookManager(hookAddr, detourFuncAddr);
+    hookManager = new HookManager(hookAddr, payloadFuncAddr);
     hookManager->hook();
 
 	for (int i = 0; i < 5; ++i) {
@@ -60,6 +97,7 @@ void testHookCloseHandle() {
 	}
 
     hookManager->unhook();
+	delete hookManager;
     FreeLibrary(hKernel32);
     printf("Good job!\n");
 }

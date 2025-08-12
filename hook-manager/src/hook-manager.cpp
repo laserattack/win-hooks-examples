@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-HookManager::HookManager(void* hookAddr, void* detourFuncAddr)
-    : hookAddr(hookAddr), detourFuncAddr(detourFuncAddr) {}
-void* HookManager::getDetourFuncAddr() { return detourFuncAddr; }
+HookManager::HookManager(void* hookAddr, void* payloadFuncAddr)
+    : hookAddr(hookAddr), payloadFuncAddr(payloadFuncAddr) {}
+void* HookManager::getPayloadFuncAddr() { return payloadFuncAddr; }
 void* HookManager::getHookAddr() { return hookAddr; }
 
 // Установка хука
@@ -16,7 +16,28 @@ void HookManager::hook() {
     DWORD oldProtect;
     VirtualProtect(hookAddr, 13, PAGE_EXECUTE_READWRITE, &oldProtect);
 	// ------------------------
-    void* hkd = (void*)hooked;
+	void* hkd = (void*)hooked;
+	// Патч
+	// mov r11, АДРЕС_ФУНКЦИИ
+	// jmp r11
+	uint8_t patch[13] = { 0x49, 0xBB, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0xFF, 0xE3 };
+    memcpy(patch + 2, &hkd, sizeof(void*));
+	memcpy(hookAddr, patch, 13);
+	// ------------------------
+	// Восстановление разрешений
+    VirtualProtect(hookAddr, 13, oldProtect, &oldProtect);
+    isHooked = true;
+}
+
+void HookManager::hook(void* detourFunc) {
+    if (isHooked) return;
+	// Сохранение оригинальных байт
+    memcpy(originalBytes, hookAddr, 13);
+	// Выдача разрешения на запись на странице памяти с целевой функцией
+    DWORD oldProtect;
+    VirtualProtect(hookAddr, 13, PAGE_EXECUTE_READWRITE, &oldProtect);
+	// ------------------------
+	void* hkd = detourFunc;
 	// Патч
 	// mov r11, АДРЕС_ФУНКЦИИ
 	// jmp r11
@@ -67,9 +88,9 @@ void hooked() {
         "push %r12\n" \
     );
     asm volatile (
-        "call *%[detourFuncAddr]\n"
+        "call *%[payloadFuncAddr]\n"
         :
-        : [detourFuncAddr] "r" (hookManager->getDetourFuncAddr())
+        : [payloadFuncAddr] "r" (hookManager->getPayloadFuncAddr())
     );
     hookManager->unhook();
     void* hookAddr = hookManager->getHookAddr();
@@ -126,4 +147,34 @@ void hooked() {
         "mov %r13, %rbp\n" \
         "jmp *%r15\n" \
     );
+}
+
+// Готовые хуки
+
+HANDLE hookCreateFileA(
+	LPCSTR lpFileName,
+    DWORD dwDesiredAccess,
+    DWORD dwShareMode,
+    LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+    DWORD dwCreationDisposition,
+    DWORD dwFlagsAndAttributes,
+    HANDLE hTemplateFile
+) {
+	
+	printf("CreateFileA function is hooked! Filename: %s\n", lpFileName);
+
+	hookManager->unhook();
+
+	HANDLE result = CreateFileA(
+		lpFileName,
+		dwDesiredAccess,
+		dwShareMode,
+		lpSecurityAttributes,
+		dwCreationDisposition,
+		dwFlagsAndAttributes,
+		hTemplateFile
+	);
+
+	hookManager->hook((void*)hookCreateFileA);
+	return result;
 }
