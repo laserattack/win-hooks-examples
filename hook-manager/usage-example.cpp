@@ -10,10 +10,12 @@ void testConcreteHookCreateFileA();
 void payload();
 
 int main() {
+	// Первый режим работы
 	printf("	testHookCloseHandle\n");
     testHookCloseHandle();
 	printf("	testHookCreateFileA\n");
     testHookCreateFileA();
+	// Второй режим работы (хуки с перехватом аргументов)
 	printf("	testConcreteHookCreateFileA\n");
 	testConcreteHookCreateFileA();
     return 0;
